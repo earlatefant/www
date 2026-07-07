@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>split view 🧭 v1</title>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; background: #111; }
+  .wrap { display: flex; flex-direction: column; height: 100vh; }
+  .meta-row { display: flex; font: 11px monospace; color: #888; }
+  .meta-row div { flex: 1; padding: 4px 10px; border-bottom: 1px solid #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .panes { flex: 1; display: flex; min-height: 0; }
+  .pane { flex: 1; min-width: 0; background: #fff; }
+  .pane + .pane { border-left: 2px solid #333; }
+  .empty { padding: 20px; font: 13px monospace; color: #666; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="meta-row">
+    <div id="meta-left">left: —</div>
+    <div id="meta-right">right: —</div>
+  </div>
+  <div class="panes">
+    <div class="pane" id="pane-left"><div class="empty">waiting for userscript…</div></div>
+    <div class="pane" id="pane-right"><div class="empty">waiting for userscript…</div></div>
+  </div>
+</div>
+</body>
+</html>
