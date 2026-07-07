@@ -2,28 +2,122 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>split view 🧭 v1</title>
+<title>split view 🧭 v2</title>
 <style>
-  html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; background: #111; }
-  .wrap { display: flex; flex-direction: column; height: 100vh; }
-  .meta-row { display: flex; font: 11px monospace; color: #888; }
-  .meta-row div { flex: 1; padding: 4px 10px; border-bottom: 1px solid #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .panes { flex: 1; display: flex; min-height: 0; }
-  .pane { flex: 1; min-width: 0; background: #fff; }
-  .pane + .pane { border-left: 2px solid #333; }
-  .empty { padding: 20px; font: 13px monospace; color: #666; }
+  html, body { margin: 0; min-height: 100%; font-family: system-ui, sans-serif; background: #111; color: #ddd; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 15px; color: #888; font-weight: normal; margin: 0 0 16px; }
+  textarea {
+    width: 100%; height: 140px; box-sizing: border-box;
+    background: #1a1a1a; color: #ddd; border: 1px solid #333; border-radius: 4px;
+    font: 13px monospace; padding: 10px; resize: vertical;
+  }
+  .controls { display: flex; gap: 10px; margin-top: 10px; }
+  button {
+    padding: 8px 14px; font: 12px monospace; border-radius: 4px; cursor: pointer;
+    border: 1px solid currentColor; background: #222; color: #0af;
+  }
+  button:disabled { opacity: 0.4; cursor: default; }
+  ul#status-list { list-style: none; padding: 0; margin: 20px 0 0; font: 12px monospace; }
+  ul#status-list li { padding: 4px 8px; border-radius: 3px; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  li.cached { background: #123a1a; color: #7f7; }
+  li.pending { background: #3a1212; color: #f77; }
+  .go-status { margin-top: 10px; font: 12px monospace; color: #888; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="meta-row">
-    <div id="meta-left">left: —</div>
-    <div id="meta-right">right: —</div>
+  <h1>🧭 paste share URLs, one per line</h1>
+  <textarea id="urls" placeholder="https://claude.ai/share/..."></textarea>
+  <div class="controls">
+    <button id="commit-btn">commit</button>
+    <button id="go-btn" disabled>go →</button>
   </div>
-  <div class="panes">
-    <div class="pane" id="pane-left"><div class="empty">waiting for userscript…</div></div>
-    <div class="pane" id="pane-right"><div class="empty">waiting for userscript…</div></div>
-  </div>
+  <ul id="status-list"></ul>
+  <div class="go-status" id="go-status"></div>
 </div>
+
+<script>
+  // NOTE: GM_getValue/GM_setValue come from the Tampermonkey userscript's @match
+  // on this page. If they're undefined, the userscript isn't installed/matching here.
+
+  const SHARE_ID_RE = /\/share\/([0-9a-f-]{36})/i;
+  const QUEUE_KEY = 'queue:list';
+  const captureKey = (id) => `capture:${id}`;
+
+  const urlsEl = document.getElementById('urls');
+  const commitBtn = document.getElementById('commit-btn');
+  const goBtn = document.getElementById('go-btn');
+  const statusList = document.getElementById('status-list');
+  const goStatus = document.getElementById('go-status');
+
+  function hasGM() {
+    return typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+  }
+
+  function parseIds(text) {
+    return text
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const m = line.match(SHARE_ID_RE);
+        return m ? m[1] : null;
+      })
+      .filter(Boolean);
+  }
+
+  function isCached(id) {
+    return GM_getValue(captureKey(id), null) !== null;
+  }
+
+  function renderStatusList(ids) {
+    statusList.innerHTML = '';
+    ids.forEach(id => {
+      const li = document.createElement('li');
+      const cached = isCached(id);
+      li.className = cached ? 'cached' : 'pending';
+      li.innerHTML = `<span>${id}</span><span>${cached ? '✓ cached' : '● pending'}</span>`;
+      statusList.appendChild(li);
+    });
+    const remaining = ids.filter(id => !isCached(id)).length;
+    goBtn.disabled = ids.length === 0;
+    goStatus.textContent = ids.length === 0
+      ? ''
+      : remaining === 0
+        ? 'All captured. 🌿'
+        : `${remaining} of ${ids.length} remaining.`;
+  }
+
+  commitBtn.addEventListener('click', () => {
+    if (!hasGM()) {
+      goStatus.textContent = 'GM storage not available — is the userscript installed and matching this page?';
+      return;
+    }
+    const ids = parseIds(urlsEl.value);
+    GM_setValue(QUEUE_KEY, ids);
+    renderStatusList(ids);
+  });
+
+  goBtn.addEventListener('click', () => {
+    if (!hasGM()) return;
+    const ids = GM_getValue(QUEUE_KEY, []);
+    const nextRed = ids.find(id => !isCached(id));
+    if (nextRed) {
+      location.href = `https://claude.ai/share/${nextRed}`;
+    } else {
+      goStatus.textContent = 'All captured, nowhere to go. 🌿';
+    }
+  });
+
+  // On load, if a queue already exists (e.g. returning mid-run), restore and render it.
+  if (hasGM()) {
+    const existing = GM_getValue(QUEUE_KEY, []);
+    if (existing.length) {
+      urlsEl.value = existing.map(id => `https://claude.ai/share/${id}`).join('\n');
+      renderStatusList(existing);
+    }
+  }
+</script>
 </body>
 </html>
